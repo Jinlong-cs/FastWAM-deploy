@@ -1,0 +1,10 @@
+# Install upstream FastWAM separately with:
+#   pip install -e ../FastWAM --no-deps
+#
+# On Jetson, keep NVIDIA's PyTorch/TensorRT stack. Do not install upstream
+# FastWAM's x86 CUDA torch wheels into the AGX environment.
+huggingface_hub
+numpy
+omegaconf
+Pillow
+torch

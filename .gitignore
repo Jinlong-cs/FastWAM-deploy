@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Local environments
+.venv/
+.env
+
+# macOS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Runtime assets and generated outputs
+artifacts/
+data/
+outputs/
+tmp/
+hf_home/
+cache/
+build/
+dist/
+
+# Large model / deployment artifacts
+*.engine
+*.onnx
+*.pt
+*.pth
+*.safetensors
+
+# Generated report intermediates
+deploy_report.html

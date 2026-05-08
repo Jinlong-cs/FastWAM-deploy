@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fastwam-deploy"
+version = "0.1.0"
+description = "FastWAM RoboTwin deployment runtime and TensorRT benchmark tools for Jetson AGX Orin"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Jinlong Wu"}
+]
+dependencies = [
+  "huggingface_hub",
+  "numpy",
+  "omegaconf",
+  "Pillow",
+  "torch"
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+
+[project.urls]
+Homepage = "https://github.com/Jinlong-cs/FastWAM-deploy"
+Upstream-FastWAM = "https://github.com/yuantianyuan01/FastWAM"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
