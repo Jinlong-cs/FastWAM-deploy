@@ -1,6 +1,7 @@
 # FastWAM Deploy
 
-Deployment-oriented FastWAM runtime for RoboTwin on NVIDIA Jetson AGX Orin.
+Deployment-oriented FastWAM runtime for RoboTwin on NVIDIA Jetson AGX Orin
+and NVIDIA GB10 / DGX Spark.
 
 This repository keeps upstream FastWAM unchanged and provides the small deploy
 layer needed to run the official released RoboTwin checkpoint with:
@@ -9,7 +10,7 @@ layer needed to run the official released RoboTwin checkpoint with:
 - Partitioned TensorRT FP16 inference for VAE image encoder, video prefill, and
   dynamic-KV action denoise step.
 - Real RoboTwin offline sample input and precomputed FastWAM T5 text cache.
-- Latency and drift reports for the current AGX real-text baseline.
+- Latency and drift reports for the current AGX and DGX Spark real-text baselines.
 
 Upstream reference: [yuantianyuan01/FastWAM](https://github.com/yuantianyuan01/FastWAM).
 
@@ -20,10 +21,12 @@ FastWAM-deploy/
 ├── docs/
 │   ├── fastwam_5module_pipeline.png
 │   ├── fastwam_5module_pipeline.svg
+│   ├── fastwam_deployment_pipeline_agx_orin.png
 │   ├── fastwam_agx_deploy_report.pdf
 │   └── fastwam_sample_contract.md
 ├── results/
-│   └── agx_real_text/                  # Final AGX real-text JSON results
+│   ├── agx_real_text/                  # Final AGX real-text JSON results
+│   └── dgx_spark_real_text/            # Final DGX Spark JSON results and figures
 ├── scripts/
 │   ├── download_fastwam_assets.py
 │   ├── check_fastwam_assets.py
@@ -32,8 +35,12 @@ FastWAM-deploy/
 │   ├── export_vae_image_encoder_onnx.py
 │   ├── export_video_prefill_onnx.py
 │   ├── export_action_step_dynamic_kv_onnx.py
+│   ├── fix_onnx_double_initializers.py
+│   ├── build_trt_engine_python.py
 │   ├── benchmark_trt_partitioned_runtime.py
-│   └── compare_partitioned_trt_drift.py
+│   ├── compare_partitioned_trt_drift.py
+│   ├── build_fastwam_summary_figures.py
+│   └── run_dgx_spark_real_text_benchmark.sh
 └── src/tinyaction_fastwam/              # Runtime adapters and deploy helpers
 ```
 
@@ -167,6 +174,18 @@ trtexec --onnx=outputs/trt/action_step_dynamic_kv_fp16.onnx \
   --fp16 --builderOptimizationLevel=3 --memPoolSize=workspace:4096
 ```
 
+If `trtexec` is not available, such as on the tested DGX Spark setup, use the
+Python TensorRT builder wrapper:
+
+```bash
+PYTHONPATH=src python scripts/build_trt_engine_python.py \
+  --onnx outputs/trt/video_prefill_fp16.onnx \
+  --engine outputs/trt/video_prefill_fp16.engine \
+  --precision fp16 \
+  --builder-optimization-level 5 \
+  --workspace-gib 32
+```
+
 Run the partitioned real-text benchmark:
 
 ```bash
@@ -195,27 +214,27 @@ For convenience, the full real-text benchmark sequence can be run with:
 PYTHONPATH=src PYTHON_BIN=python bash scripts/run_robotwin_text_benchmark.sh
 ```
 
-## Current AGX Result
+## Current AGX and DGX Spark Results
 
-Measured on Jetson AGX Orin with real RoboTwin sample, precomputed T5 cache,
-batch size 1, action horizon 32, action dimension 14, and
-`num_inference_steps=1`.
+Measured with the same FastWAM released RoboTwin checkpoint, real RoboTwin
+sample, precomputed T5 cache semantics, batch size 1, action horizon 32, action
+dimension 14, and `num_inference_steps=1`.
 
-| Runtime | Text context | Mean E2E | P95 E2E | Notes |
-| --- | --- | ---: | ---: | --- |
-| PyTorch eager `.pth` | precomputed T5 cache | 323.97 ms | 324.40 ms | BF16 eager baseline |
-| Partitioned TensorRT | precomputed T5 cache | 134.57 ms | 134.69 ms | FP16 engines, finite output |
+| Runtime | AGX mean E2E | DGX Spark mean E2E | Speedup | Notes |
+| --- | ---: | ---: | ---: | --- |
+| PyTorch eager `.pth` | 323.97 ms | 150.66 ms | 2.15x | BF16 eager baseline |
+| Partitioned TensorRT FP16 | 134.57 ms | 80.79 ms | 1.67x | 3 engines + host scheduler/decode |
 
 TensorRT stage means:
 
-| Stage | Mean latency |
-| --- | ---: |
-| VAE image encoder | 39.35 ms |
-| Video prefill + K/V cache | 74.65 ms |
-| K/V cast | 0.55 ms |
-| Action denoise loop | 19.39 ms |
-| Scheduler | 0.09 ms |
-| Action decode / denorm | 0.21 ms |
+| Stage | AGX mean | DGX Spark mean | AGX/DGX speedup |
+| --- | ---: | ---: | ---: |
+| VAE image encoder | 39.35 ms | 9.45 ms | 4.17x |
+| Video prefill + K/V cache | 74.65 ms | 57.74 ms | 1.29x |
+| K/V cast | 0.55 ms | 0.002 ms | 231.04x |
+| Action denoise loop | 19.39 ms | 13.34 ms | 1.45x |
+| Scheduler | 0.09 ms | 0.03 ms | 3.51x |
+| Action decode / denorm | 0.21 ms | 0.04 ms | 5.12x |
 
 Numerical drift is still an accuracy gate, not solved by this runtime benchmark:
 
@@ -228,8 +247,15 @@ but simulator success-rate or accuracy-equivalence claims require further
 drift reduction, likely via VAE/video-prefill precision localization or selective
 FP32.
 
-Final JSON outputs are kept under
-[`results/agx_real_text/`](results/agx_real_text/). The full deployment report is
+Final JSON outputs are kept under [`results/agx_real_text/`](results/agx_real_text/)
+and [`results/dgx_spark_real_text/`](results/dgx_spark_real_text/). Summary
+figures are:
+
+- [`docs/fastwam_deployment_pipeline_agx_orin.png`](docs/fastwam_deployment_pipeline_agx_orin.png)
+- [`results/dgx_spark_real_text/fastwam_deployment_pipeline_dgx_spark.png`](results/dgx_spark_real_text/fastwam_deployment_pipeline_dgx_spark.png)
+- [`results/dgx_spark_real_text/fastwam_agx_vs_dgx_spark_comparison.png`](results/dgx_spark_real_text/fastwam_agx_vs_dgx_spark_comparison.png)
+
+The AGX deployment report is
 [`docs/fastwam_agx_deploy_report.pdf`](docs/fastwam_agx_deploy_report.pdf).
 
 ## Acknowledgements

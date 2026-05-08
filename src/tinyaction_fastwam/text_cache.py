@@ -74,10 +74,25 @@ def load_text_context_from_cache(
         raise ValueError(f"Cached context must be [L,D], got {tuple(context.shape)} in {cache_path}")
     if context_mask.ndim != 1:
         raise ValueError(f"Cached mask must be [L], got {tuple(context_mask.shape)} in {cache_path}")
-    if context.shape[0] != int(context_len) or context_mask.shape[0] != int(context_len):
+    if context.shape[0] != context_mask.shape[0]:
         raise ValueError(
-            f"Cached text length mismatch in {cache_path}: "
-            f"context={tuple(context.shape)}, mask={tuple(context_mask.shape)}, expected L={context_len}"
+            f"Cached text context/mask length mismatch in {cache_path}: "
+            f"context={tuple(context.shape)}, mask={tuple(context_mask.shape)}"
+        )
+    if context.shape[0] > int(context_len):
+        raise ValueError(
+            f"Cached text length is longer than runtime context in {cache_path}: "
+            f"context={tuple(context.shape)}, expected L<={context_len}"
+        )
+    if context.shape[0] < int(context_len):
+        pad_len = int(context_len) - int(context.shape[0])
+        context = torch.cat(
+            [context, torch.zeros((pad_len, context.shape[1]), dtype=context.dtype, device=context.device)],
+            dim=0,
+        )
+        context_mask = torch.cat(
+            [context_mask, torch.zeros((pad_len,), dtype=context_mask.dtype, device=context_mask.device)],
+            dim=0,
         )
 
     context = context.unsqueeze(0).to(device=device, dtype=dtype, non_blocking=True)

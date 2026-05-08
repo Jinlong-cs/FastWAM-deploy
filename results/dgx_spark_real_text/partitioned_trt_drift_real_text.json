@@ -1,0 +1,689 @@
+{
+  "status": "success",
+  "validation_mode": "eager_fp16_reference_vs_partitioned_trt_fp16_real_robotwin_text_cache",
+  "preset": "robotwin_uncond_3cam_384",
+  "sample_source": "offline_sample:/home/airbot/wujinlong/fastwam-deploy/data/real_samples/robotwin_unified_ep000000_frame000000.npz",
+  "instruction": "Lift the bottle with narrow top head-up from the table",
+  "text_context": "precomputed_t5_cache",
+  "num_inference_steps": 1,
+  "action_horizon": 32,
+  "seed": 1234,
+  "selected_kv_layers": [
+    0,
+    15,
+    29
+  ],
+  "eager_metadata": {
+    "runtime_mode": "eager_reference",
+    "backend": "pytorch",
+    "mixed_precision": "fp16",
+    "checkpoint": "/home/airbot/wujinlong/artifacts/checkpoints/fastwam_release/robotwin_uncond_3cam_384.pt",
+    "dataset_stats": "/home/airbot/wujinlong/artifacts/checkpoints/fastwam_release/robotwin_uncond_3cam_384_dataset_stats.json",
+    "load_ms": 21359.56887499924,
+    "run_ms": 679.3510550050996,
+    "text_context": {
+      "text_context": "precomputed_t5_cache",
+      "text_cache_path": "/home/airbot/wujinlong/fastwam-deploy/data/text_embeds_cache/robotwin/82243a4317e52ea0809eaaef4ab867833e575409d75cc0eabddd4d352133bde2.t5_len128.wan22ti2v5b.pt",
+      "semantic_text_encoder": "precomputed_cache",
+      "prompt": "A video recorded from a robot's point of view executing the following instruction: Lift the bottle with narrow top head-up from the table"
+    },
+    "video_seq_len": 120,
+    "selected_kv_layers": [
+      0,
+      15,
+      29
+    ]
+  },
+  "trt_metadata": {
+    "runtime_mode": "partitioned_tensorrt_candidate",
+    "backend": "tensorrt",
+    "precision": "fp16_engines",
+    "load_ms": 6245.439288002672,
+    "run_ms": 97.09492799447617,
+    "engines": {
+      "vae": "/home/airbot/wujinlong/fastwam-deploy/outputs/trt/vae_image_encoder_fp16_patched.engine",
+      "video_prefill": "/home/airbot/wujinlong/fastwam-deploy/outputs/trt/video_prefill_fp16.engine",
+      "action_step": "/home/airbot/wujinlong/fastwam-deploy/outputs/trt/action_step_dynamic_kv_fp16.engine"
+    },
+    "engine_size_bytes": {
+      "vae": 297776084,
+      "video_prefill": 9717255316,
+      "action_step": 2058638572
+    },
+    "real_input_metadata": {
+      "sample_source": "offline_sample:/home/airbot/wujinlong/fastwam-deploy/data/real_samples/robotwin_unified_ep000000_frame000000.npz",
+      "instruction": "Lift the bottle with narrow top head-up from the table",
+      "text_context": "precomputed_t5_cache",
+      "semantic_text_encoder": "precomputed_cache",
+      "text_cache_path": "/home/airbot/wujinlong/fastwam-deploy/data/text_embeds_cache/robotwin/82243a4317e52ea0809eaaef4ab867833e575409d75cc0eabddd4d352133bde2.t5_len128.wan22ti2v5b.pt",
+      "prompt": "A video recorded from a robot's point of view executing the following instruction: Lift the bottle with narrow top head-up from the table",
+      "proprio_source": "cached_proprio_encoder",
+      "proprio_encoder_cache": "/home/airbot/wujinlong/fastwam-deploy/outputs/runtime/proprio_encoder.pt",
+      "raw_state_shape": [
+        14
+      ],
+      "normalized_proprio_shape": [
+        1,
+        14
+      ]
+    },
+    "denormalize_mode": "z_score_global_action_default",
+    "kv_binding": {
+      "direct_fp16_bindings": 60,
+      "cast_to_fp16_bindings": 0,
+      "cast_buffer_names": []
+    },
+    "memory_free_bytes": {
+      "before_load": 31896403968,
+      "after_run": 18408083456
+    }
+  },
+  "comparisons": {
+    "context_with_proprio": {
+      "status": "compared",
+      "shape": [
+        1,
+        129,
+        4096
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 0.0,
+      "mean_abs": 0.0,
+      "rmse": 0.0,
+      "max_rel": 0.0,
+      "mean_rel": 0.0,
+      "cosine": 1.0000046226465156
+    },
+    "latents_initial": {
+      "status": "compared",
+      "shape": [
+        1,
+        32,
+        14
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 0.0,
+      "mean_abs": 0.0,
+      "rmse": 0.0,
+      "max_rel": 0.0,
+      "mean_rel": 0.0,
+      "cosine": 0.999999940887049
+    },
+    "first_frame_latents": {
+      "status": "compared",
+      "shape": [
+        1,
+        48,
+        1,
+        24,
+        20
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 4.009765625,
+      "mean_abs": 0.7252694964408875,
+      "rmse": 0.906136691570282,
+      "max_rel": 1.9991296529769897,
+      "mean_rel": 0.7130865454673767,
+      "cosine": 0.5971503653147461
+    },
+    "pred_action_first": {
+      "status": "compared",
+      "shape": [
+        1,
+        32,
+        14
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 2.1904296875,
+      "mean_abs": 0.39496374130249023,
+      "rmse": 0.6726667284965515,
+      "max_rel": 1.9779467582702637,
+      "mean_rel": 0.41324472427368164,
+      "cosine": 0.8497503694118467
+    },
+    "pred_action_last": {
+      "status": "compared",
+      "shape": [
+        1,
+        32,
+        14
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 2.1904296875,
+      "mean_abs": 0.39496374130249023,
+      "rmse": 0.6726667284965515,
+      "max_rel": 1.9779467582702637,
+      "mean_rel": 0.41324472427368164,
+      "cosine": 0.8497503694118467
+    },
+    "latents_action_final": {
+      "status": "compared",
+      "shape": [
+        1,
+        32,
+        14
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 2.1904296875,
+      "mean_abs": 0.3949645459651947,
+      "rmse": 0.6726653575897217,
+      "max_rel": 1.9387351274490356,
+      "mean_rel": 0.4885352551937103,
+      "cosine": 0.5513300457518495
+    },
+    "action_decoded": {
+      "status": "compared",
+      "shape": [
+        1,
+        32,
+        14
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 1.5989004373550415,
+      "mean_abs": 0.2773153781890869,
+      "rmse": 0.4770335257053375,
+      "max_rel": 1.9324315786361694,
+      "mean_rel": 0.8008450865745544,
+      "cosine": 0.7153210205690935
+    },
+    "schedule_timesteps": {
+      "status": "compared",
+      "shape": [
+        1
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 0.0,
+      "mean_abs": 0.0,
+      "rmse": 0.0,
+      "max_rel": 0.0,
+      "mean_rel": 0.0,
+      "cosine": 1.0
+    },
+    "schedule_deltas": {
+      "status": "compared",
+      "shape": [
+        1
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 0.0,
+      "mean_abs": 0.0,
+      "rmse": 0.0,
+      "max_rel": 0.0,
+      "mean_rel": 0.0,
+      "cosine": 1.0
+    },
+    "video_k_0": {
+      "status": "compared",
+      "shape": [
+        1,
+        120,
+        3072
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 16.7578125,
+      "mean_abs": 0.5575605630874634,
+      "rmse": 1.3233258724212646,
+      "max_rel": 2.0,
+      "mean_rel": 0.8460805416107178,
+      "cosine": 0.2580266535809813
+    },
+    "video_v_0": {
+      "status": "compared",
+      "shape": [
+        1,
+        120,
+        3072
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 6.845703125,
+      "mean_abs": 0.5649502277374268,
+      "rmse": 0.7814158201217651,
+      "max_rel": 2.0,
+      "mean_rel": 0.8669300675392151,
+      "cosine": 0.43667222801653444
+    },
+    "video_k_15": {
+      "status": "compared",
+      "shape": [
+        1,
+        120,
+        3072
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 20.7890625,
+      "mean_abs": 1.236329436302185,
+      "rmse": 1.681613802909851,
+      "max_rel": 2.0,
+      "mean_rel": 0.8896128535270691,
+      "cosine": 0.2835479120588653
+    },
+    "video_v_15": {
+      "status": "compared",
+      "shape": [
+        1,
+        120,
+        3072
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 9.125,
+      "mean_abs": 1.137648344039917,
+      "rmse": 1.4668445587158203,
+      "max_rel": 2.0,
+      "mean_rel": 0.9724277257919312,
+      "cosine": 0.0579660959221884
+    },
+    "video_k_29": {
+      "status": "compared",
+      "shape": [
+        1,
+        120,
+        3072
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 115.6279296875,
+      "mean_abs": 1.0277981758117676,
+      "rmse": 3.4610953330993652,
+      "max_rel": 2.0,
+      "mean_rel": 0.8571974039077759,
+      "cosine": 0.6652256538311305
+    },
+    "video_v_29": {
+      "status": "compared",
+      "shape": [
+        1,
+        120,
+        3072
+      ],
+      "reference_finite": true,
+      "candidate_finite": true,
+      "max_abs": 4.00439453125,
+      "mean_abs": 0.48323678970336914,
+      "rmse": 0.6249696016311646,
+      "max_rel": 2.0,
+      "mean_rel": 0.9412164688110352,
+      "cosine": 0.1935797759179771
+    }
+  },
+  "tensor_summaries": {
+    "eager": {
+      "context_with_proprio": {
+        "shape": [
+          1,
+          129,
+          4096
+        ],
+        "finite": true,
+        "min": -1.3828125,
+        "max": 1.7109375,
+        "mean": 3.215723700122908e-05,
+        "std": 0.0504295714199543
+      },
+      "latents_initial": {
+        "shape": [
+          1,
+          32,
+          14
+        ],
+        "finite": true,
+        "min": -2.767578125,
+        "max": 3.029296875,
+        "mean": -0.06020566448569298,
+        "std": 1.011296033859253
+      },
+      "first_frame_latents": {
+        "shape": [
+          1,
+          48,
+          1,
+          24,
+          20
+        ],
+        "finite": true,
+        "min": -3.41796875,
+        "max": 3.44140625,
+        "mean": -0.07035619020462036,
+        "std": 0.8488544225692749
+      },
+      "pred_action_first": {
+        "shape": [
+          1,
+          32,
+          14
+        ],
+        "finite": true,
+        "min": -3.033203125,
+        "max": 4.01171875,
+        "mean": 0.03132311627268791,
+        "std": 1.2611719369888306
+      },
+      "pred_action_last": {
+        "shape": [
+          1,
+          32,
+          14
+        ],
+        "finite": true,
+        "min": -3.033203125,
+        "max": 4.01171875,
+        "mean": 0.03132311627268791,
+        "std": 1.2611719369888306
+      },
+      "latents_action_final": {
+        "shape": [
+          1,
+          32,
+          14
+        ],
+        "finite": true,
+        "min": -1.6845703125,
+        "max": 1.58984375,
+        "mean": -0.09152957051992416,
+        "std": 0.7815017104148865
+      },
+      "action_decoded": {
+        "shape": [
+          1,
+          32,
+          14
+        ],
+        "finite": true,
+        "min": -1.3248687982559204,
+        "max": 2.102294445037842,
+        "mean": 0.23550379276275635,
+        "std": 0.6305981874465942
+      },
+      "schedule_timesteps": {
+        "shape": [
+          1
+        ],
+        "finite": true,
+        "min": 1000.0,
+        "max": 1000.0,
+        "mean": 1000.0,
+        "std": 0.0
+      },
+      "schedule_deltas": {
+        "shape": [
+          1
+        ],
+        "finite": true,
+        "min": -1.0,
+        "max": -1.0,
+        "mean": -1.0,
+        "std": 0.0
+      },
+      "video_k_0": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -8.859375,
+        "max": 8.8671875,
+        "mean": -0.0008846478303894401,
+        "std": 1.085413932800293
+      },
+      "video_v_0": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -5.16015625,
+        "max": 6.49609375,
+        "mean": -0.006666658446192741,
+        "std": 0.7088344097137451
+      },
+      "video_k_15": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -11.859375,
+        "max": 10.8359375,
+        "mean": -0.04264327511191368,
+        "std": 1.4049016237258911
+      },
+      "video_v_15": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -8.328125,
+        "max": 8.0546875,
+        "mean": 0.007113290019333363,
+        "std": 1.0847429037094116
+      },
+      "video_k_29": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -116.0625,
+        "max": 117.75,
+        "mean": 0.13097524642944336,
+        "std": 4.254356384277344
+      },
+      "video_v_29": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -2.623046875,
+        "max": 2.666015625,
+        "mean": -0.00033161972532980144,
+        "std": 0.2883013188838959
+      }
+    },
+    "trt": {
+      "context_with_proprio": {
+        "shape": [
+          1,
+          129,
+          4096
+        ],
+        "finite": true,
+        "min": -1.3828125,
+        "max": 1.7109375,
+        "mean": 3.215723700122908e-05,
+        "std": 0.0504295714199543
+      },
+      "latents_initial": {
+        "shape": [
+          1,
+          32,
+          14
+        ],
+        "finite": true,
+        "min": -2.767578125,
+        "max": 3.029296875,
+        "mean": -0.06020566448569298,
+        "std": 1.011296033859253
+      },
+      "first_frame_latents": {
+        "shape": [
+          1,
+          48,
+          1,
+          24,
+          20
+        ],
+        "finite": true,
+        "min": -2.90625,
+        "max": 2.806640625,
+        "mean": -0.1483629047870636,
+        "std": 1.0938397645950317
+      },
+      "pred_action_first": {
+        "shape": [
+          1,
+          32,
+          14
+        ],
+        "finite": true,
+        "min": -3.046875,
+        "max": 3.736328125,
+        "mean": 0.02683773636817932,
+        "std": 1.1724692583084106
+      },
+      "pred_action_last": {
+        "shape": [
+          1,
+          32,
+          14
+        ],
+        "finite": true,
+        "min": -3.046875,
+        "max": 3.736328125,
+        "mean": 0.02683773636817932,
+        "std": 1.1724692583084106
+      },
+      "latents_action_final": {
+        "shape": [
+          1,
+          32,
+          14
+        ],
+        "finite": true,
+        "min": -0.97265625,
+        "max": 0.859375,
+        "mean": -0.08704601228237152,
+        "std": 0.5740387439727783
+      },
+      "action_decoded": {
+        "shape": [
+          1,
+          32,
+          14
+        ],
+        "finite": true,
+        "min": -0.13849914073944092,
+        "max": 1.035839319229126,
+        "mean": 0.21114680171012878,
+        "std": 0.3422660827636719
+      },
+      "schedule_timesteps": {
+        "shape": [
+          1
+        ],
+        "finite": true,
+        "min": 1000.0,
+        "max": 1000.0,
+        "mean": 1000.0,
+        "std": 0.0
+      },
+      "schedule_deltas": {
+        "shape": [
+          1
+        ],
+        "finite": true,
+        "min": -1.0,
+        "max": -1.0,
+        "mean": -1.0,
+        "std": 0.0
+      },
+      "video_k_0": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -9.0625,
+        "max": 9.0078125,
+        "mean": -0.00658546295017004,
+        "std": 1.087192177772522
+      },
+      "video_v_0": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -5.171875,
+        "max": 6.4609375,
+        "mean": 0.0014731475384905934,
+        "std": 0.7611300945281982
+      },
+      "video_k_15": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -10.03125,
+        "max": 11.2109375,
+        "mean": -0.05241655930876732,
+        "std": 1.4030934572219849
+      },
+      "video_v_15": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -6.2109375,
+        "max": 6.62890625,
+        "mean": -0.002376892603933811,
+        "std": 1.0522550344467163
+      },
+      "video_k_29": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -114.5625,
+        "max": 115.625,
+        "mean": 0.10147739946842194,
+        "std": 4.200928211212158
+      },
+      "video_v_29": {
+        "shape": [
+          1,
+          120,
+          3072
+        ],
+        "finite": true,
+        "min": -4.02734375,
+        "max": 3.4609375,
+        "mean": -0.010768469423055649,
+        "std": 0.6130148768424988
+      }
+    }
+  },
+  "summary": {
+    "num_compared_tensors": 15,
+    "worst_max_abs": 115.6279296875,
+    "all_compared_finite": true,
+    "note": "This is a numerical drift report, not a simulator success-rate report. TensorRT FP16 engines are compared against an eager FP16 reference on the same real RoboTwin sample, real T5 text cache, seed, initial action latent, and scheduler."
+  }
+}
