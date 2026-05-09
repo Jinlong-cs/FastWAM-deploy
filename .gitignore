@@ -18,6 +18,8 @@ __pycache__/
 artifacts/
 data/
 outputs/
+outputs/**/*.json
+results
 tmp/
 hf_home/
 cache/
@@ -30,6 +32,8 @@ dist/
 *.pt
 *.pth
 *.safetensors
+*.plan
+*.calibration.cache
 
 # Generated report intermediates
 deploy_report.html
