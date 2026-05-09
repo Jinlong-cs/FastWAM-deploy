@@ -4,9 +4,9 @@ Public deployment layer for running the official FastWAM RoboTwin checkpoint
 with PyTorch eager bring-up and partitioned TensorRT benchmarking.
 
 This repository keeps upstream FastWAM unchanged. Clone upstream FastWAM next
-to this repo, download the public assets, prepare a RoboTwin sample and text
-cache, then run the export, TensorRT build, benchmark, and drift validation
-commands below.
+to this repo, prepare local assets, prepare a RoboTwin sample and text cache,
+then run the export, TensorRT build, benchmark, and drift validation commands
+below.
 
 Upstream reference: [yuantianyuan01/FastWAM](https://github.com/yuantianyuan01/FastWAM).
 
@@ -77,17 +77,6 @@ Validate the synthetic public fixture without model weights or private data:
 ```bash
 python3 scripts/check_minimal_fixture.py
 ```
-
-## Asset Download
-
-Download the official released RoboTwin checkpoint and dataset stats:
-
-```bash
-PYTHONPATH=src python scripts/download_fastwam_assets.py
-```
-
-Place the Wan/FastWAM model files used by upstream FastWAM under the directory
-referenced by `DIFFSYNTH_MODEL_BASE_PATH`.
 
 ## Public RoboTwin Sample
 
