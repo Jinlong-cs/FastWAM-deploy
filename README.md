@@ -78,21 +78,12 @@ Validate the synthetic public fixture without model weights or private data:
 python3 scripts/check_minimal_fixture.py
 ```
 
-## Asset Download And Check
+## Asset Download
 
 Download the official released RoboTwin checkpoint and dataset stats:
 
 ```bash
 PYTHONPATH=src python scripts/download_fastwam_assets.py
-PYTHONPATH=src python scripts/check_fastwam_assets.py
-```
-
-Expected checkpoint layout:
-
-```text
-artifacts/checkpoints/fastwam_release/
-├── robotwin_uncond_3cam_384.pt
-└── robotwin_uncond_3cam_384_dataset_stats.json
 ```
 
 Place the Wan/FastWAM model files used by upstream FastWAM under the directory

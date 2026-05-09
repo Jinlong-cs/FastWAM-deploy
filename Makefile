@@ -1,4 +1,4 @@
-.PHONY: install download-release check-assets eager-bench trt-bench drift
+.PHONY: install download-release eager-bench trt-bench drift
 
 PYTHON ?= python
 PYTHONPATH := src
@@ -8,9 +8,6 @@ install:
 
 download-release:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) scripts/download_fastwam_assets.py
-
-check-assets:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) scripts/check_fastwam_assets.py
 
 eager-bench:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) scripts/benchmark_fastwam.py \
