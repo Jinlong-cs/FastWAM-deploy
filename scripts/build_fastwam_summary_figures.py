@@ -3,9 +3,38 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 from pathlib import Path
+from textwrap import wrap
 from typing import Any
+
+
+COLORS = {
+    "bg": "#eef3f8",
+    "card": "#ffffff",
+    "ink": "#111827",
+    "muted": "#475569",
+    "line": "#cbd5e1",
+    "blue": "#2563eb",
+    "blue_soft": "#eaf2ff",
+    "teal": "#0f766e",
+    "teal_soft": "#e7f8f5",
+    "orange": "#ea580c",
+    "orange_soft": "#fff3e7",
+    "red": "#b91c1c",
+    "red_soft": "#fff1f2",
+    "green": "#15803d",
+    "green_soft": "#ecfdf5",
+    "slate": "#64748b",
+    "slate_soft": "#f8fafc",
+    "violet": "#4f46e5",
+    "violet_soft": "#eef2ff",
+}
+
+FONT_SCALE = 1.08
+
+
+def scaled_font_size(size: int) -> int:
+    return max(1, int(round(size * FONT_SCALE)))
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,8 +64,11 @@ def stage(data: dict[str, Any], key: str) -> float:
 
 
 def engine_gib(data: dict[str, Any], key: str) -> float:
-    value = float(data.get("engine_size_bytes", {}).get(key, 0.0))
-    return value / (1024.0**3)
+    return float(data.get("engine_size_bytes", {}).get(key, 0.0)) / (1024.0**3)
+
+
+def pct(part: float, total: float) -> float:
+    return 100.0 * part / total if total else 0.0
 
 
 def drift_summary(data: dict[str, Any]) -> tuple[str, str]:
@@ -45,32 +77,37 @@ def drift_summary(data: dict[str, Any]) -> tuple[str, str]:
     action = comparisons.get("action_decoded", {})
     worst = summary.get("worst_max_abs")
     if isinstance(worst, dict):
-        worst_text = f"{worst.get('name', 'worst')} max_abs={float(worst.get('max_abs', 0.0)):.3f}"
+        worst_text = f"worst {worst.get('name', '')} max_abs={float(worst.get('max_abs', 0.0)):.3f}"
     elif worst is not None:
         worst_text = f"worst max_abs={float(worst):.3f}"
     else:
         worst_text = "worst drift not available"
     action_text = (
-        f"action max_abs={float(action.get('max_abs', 0.0)):.3f}, "
+        f"decoded action max_abs={float(action.get('max_abs', 0.0)):.3f}, "
         f"mean_abs={float(action.get('mean_abs', 0.0)):.3f}"
         if action
-        else "action drift not available"
+        else "decoded action drift not available"
     )
-    finite = summary.get("all_compared_finite", data.get("all_compared_finite"))
     count = summary.get("num_compared_tensors", summary.get("num_compared", len(comparisons)))
-    return f"{count} tensors compared, all finite={finite}", f"{worst_text}; {action_text}"
+    finite = summary.get("all_compared_finite", data.get("all_compared_finite"))
+    return f"{count} tensors compared; all finite={finite}", f"{worst_text}; {action_text}"
 
 
 def fonts():
     from PIL import ImageFont
 
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-    ]
-    regular = next((p for p in candidates if Path(p).exists() and "Bold" not in p), None)
-    bold = next((p for p in candidates if Path(p).exists() and "Bold" in p), regular)
+    candidates = {
+        "regular": [
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ],
+        "bold": [
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        ],
+    }
+    regular = next((p for p in candidates["regular"] if Path(p).exists()), None)
+    bold = next((p for p in candidates["bold"] if Path(p).exists()), regular)
 
     def f(size: int, *, b: bool = False):
         path = bold if b else regular
@@ -83,376 +120,400 @@ class Canvas:
     def __init__(self, width: int, height: int) -> None:
         from PIL import Image, ImageDraw
 
-        self.image = Image.new("RGB", (width, height), "#f4f7fb")
+        self.image = Image.new("RGB", (width, height), COLORS["bg"])
         self.draw = ImageDraw.Draw(self.image)
         self.font = fonts()
         self.width = width
         self.height = height
 
-    def text(self, xy, text: str, size: int, fill: str = "#111827", bold: bool = False, anchor: str | None = None) -> None:
-        self.draw.text(xy, text, font=self.font(size, b=bold), fill=fill, anchor=anchor)
+    def text(
+        self,
+        xy: tuple[float, float],
+        text: str,
+        size: int,
+        fill: str = COLORS["ink"],
+        bold: bool = False,
+        anchor: str | None = None,
+    ) -> None:
+        self.draw.text(xy, text, font=self.font(scaled_font_size(size), b=bold), fill=fill, anchor=anchor)
 
-    def rounded(self, box, radius: int = 18, fill: str = "#ffffff", outline: str = "#cbd5e1", width: int = 2) -> None:
+    def rounded(
+        self,
+        box: tuple[int, int, int, int],
+        radius: int = 24,
+        fill: str = COLORS["card"],
+        outline: str = COLORS["line"],
+        width: int = 2,
+    ) -> None:
         self.draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
 
-    def pill(self, xy, text: str, fill: str, outline: str, color: str = "#0f172a") -> None:
-        x, y = xy
-        w = max(120, 18 * len(text) + 34)
-        h = 40
-        self.draw.rounded_rectangle((x, y, x + w, y + h), radius=20, fill=fill, outline=outline, width=2)
-        self.text((x + w / 2, y + h / 2 + 1), text, 20, color, True, anchor="mm")
+    def pill(self, x: int, y: int, text: str, fill: str, outline: str, color: str, size: int = 21) -> int:
+        scaled_size = scaled_font_size(size)
+        w = max(155, int(scaled_size * 0.62 * len(text)) + 62)
+        h = 52
+        self.draw.rounded_rectangle((x, y, x + w, y + h), radius=26, fill=fill, outline=outline, width=2)
+        self.text((x + w / 2, y + h / 2), text, size, color, True, anchor="mm")
+        return w
 
-    def arrow(self, x1: int, y: int, x2: int, color: str = "#475569") -> None:
-        self.draw.line((x1, y, x2, y), fill=color, width=5)
-        self.draw.polygon([(x2, y), (x2 - 22, y - 12), (x2 - 22, y + 12)], fill=color)
+    def wrapped(
+        self,
+        x: int,
+        y: int,
+        text: str,
+        size: int,
+        width_chars: int,
+        fill: str = COLORS["muted"],
+        bold: bool = False,
+        line_gap: int = 8,
+    ) -> int:
+        line_h = scaled_font_size(size) + line_gap
+        for line in wrap(text, width_chars):
+            self.text((x, y), line, size, fill, bold)
+            y += line_h
+        return y
 
-    def bullet(self, x: int, y: int, text: str, size: int = 20, fill: str = "#334155", dot: str = "#0f766e") -> None:
-        self.draw.ellipse((x, y + 8, x + 10, y + 18), fill=dot)
-        self.text((x + 20, y), text, size, fill)
+    def bullet(self, x: int, y: int, text: str, size: int = 21, dot: str = COLORS["teal"]) -> None:
+        self.draw.ellipse((x, y + 8, x + 11, y + 19), fill=dot)
+        self.text((x + 24, y), text, size, COLORS["muted"])
+
+    def arrow(self, x1: int, y: int, x2: int, color: str = COLORS["slate"]) -> None:
+        self.draw.line((x1, y, x2, y), fill=color, width=4)
+        self.draw.polygon([(x2, y), (x2 - 16, y - 9), (x2 - 16, y + 9)], fill=color)
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.image.save(path)
 
 
-def draw_module(canvas: Canvas, box, tag: str, title: str, bullets: list[str], lat: str, mem: str, accent: str) -> None:
+def header(c: Canvas, title: str, subtitle: str) -> None:
+    c.text((90, 70), title, 58, COLORS["ink"], True)
+    c.wrapped(90, 145, subtitle, 28, 128, COLORS["muted"])
+
+
+def stage_card(
+    c: Canvas,
+    box: tuple[int, int, int, int],
+    tag: str,
+    title: str,
+    bullets: list[str],
+    latency: str,
+    plan: str,
+    color: str,
+    fill: str,
+) -> None:
     x1, y1, x2, y2 = box
-    canvas.rounded(box, 22, "#eff6ff" if accent == "blue" else "#ecfdf5", "#2563eb" if accent == "blue" else "#15803d", 4)
-    tag_color = "#2563eb" if accent == "blue" else "#15803d"
-    canvas.draw.rounded_rectangle((x1 + 26, y1 + 26, x1 + 178, y1 + 64), radius=19, fill=tag_color)
-    canvas.text((x1 + 102, y1 + 46), tag, 18, "#ffffff", True, anchor="mm")
-    canvas.text((x1 + 30, y1 + 96), title, 26, "#111827", True)
-    canvas.draw.line((x1 + 30, y1 + 152, x2 - 30, y1 + 152), fill="#cbd5e1", width=2)
-    y = y1 + 174
+    c.rounded(box, 26, fill, color, 4)
+    c.draw.rounded_rectangle((x1 + 28, y1 + 26, x1 + 170, y1 + 68), radius=21, fill=color)
+    c.text((x1 + 99, y1 + 47), tag, 19, "#ffffff", True, anchor="mm")
+    c.wrapped(x1 + 30, y1 + 95, title, 28, 18, COLORS["ink"], True, line_gap=6)
+    c.draw.line((x1 + 30, y1 + 166, x2 - 30, y1 + 166), fill=COLORS["line"], width=2)
+    yy = y1 + 190
     for item in bullets:
-        canvas.bullet(x1 + 34, y, item, size=18, dot=tag_color)
-        y += 32
-    canvas.draw.rounded_rectangle((x1 + 28, y2 - 58, x1 + 180, y2 - 18), radius=16, fill="#ffffff", outline="#bfdbfe", width=2)
-    canvas.text((x1 + 104, y2 - 38), lat, 18, "#0f172a", True, anchor="mm")
-    canvas.draw.rounded_rectangle((x1 + 196, y2 - 58, x2 - 24, y2 - 18), radius=16, fill="#ffffff", outline="#bfdbfe", width=2)
-    canvas.text(((x1 + 196 + x2 - 24) / 2, y2 - 38), mem, 17, "#0f172a", True, anchor="mm")
+        c.bullet(x1 + 34, yy, item, 20, color)
+        yy += 38
+    c.draw.rounded_rectangle((x1 + 28, y2 - 66, x1 + 205, y2 - 22), radius=18, fill=COLORS["card"], outline=color, width=2)
+    c.text((x1 + 116, y2 - 43), latency, 20, COLORS["ink"], True, anchor="mm")
+    c.draw.rounded_rectangle((x1 + 224, y2 - 66, x2 - 26, y2 - 22), radius=18, fill=COLORS["card"], outline=color, width=2)
+    c.text(((x1 + 224 + x2 - 26) / 2, y2 - 43), plan, 19, COLORS["ink"], True, anchor="mm")
 
 
 def draw_pipeline(path: Path, *, title: str, platform_label: str, eager: dict[str, Any], trt: dict[str, Any], drift: dict[str, Any]) -> None:
-    c = Canvas(3600, 2060)
-    c.rounded((55, 55, 3545, 2000), 34, "#ffffff", "#d8e0eb", 3)
-    c.text((120, 105), title, 52, "#111827", True)
-    c.text((120, 174), "FastWAM RoboTwin real-text path: same checkpoint, same sample contract, same num_inference_steps=1.", 28, "#475569")
+    c = Canvas(3300, 2050)
+    header(
+        c,
+        title,
+        "Same FastWAM RoboTwin checkpoint, real RoboTwin sample, precomputed T5 cache, batch=1, denoise steps=1.",
+    )
 
     e2e = metric(trt, "mean_end_to_end_ms")
     p95 = metric(trt, "p95_end_to_end_ms")
-    eager_e2e = metric(eager, "mean_end_to_end_ms")
-    c.pill((120, 245), "3 TensorRT FP16 engines", "#e6fffb", "#0f766e", "#0f766e")
-    c.pill((430, 245), "real T5 text cache", "#eef2ff", "#4f46e5", "#4338ca")
-    c.pill((700, 245), "batch=1", "#fff7ed", "#ea580c", "#c2410c")
-    c.pill((870, 245), "1 denoise step", "#fff7ed", "#ea580c", "#c2410c")
-    c.pill((1130, 245), f"E2E mean {e2e:.2f} ms", "#fef2f2", "#dc2626", "#b91c1c")
-    c.pill((1420, 245), platform_label, "#f8fafc", "#0f172a", "#0f172a")
+    prefill = stage(trt, "video_prefill_ms")
 
-    y = 420
+    x = 90
+    for text, fill, outline, color in [
+        ("FP16 TensorRT", COLORS["teal_soft"], COLORS["teal"], COLORS["teal"]),
+        ("real-text cache", COLORS["violet_soft"], COLORS["violet"], COLORS["violet"]),
+        ("3 engines", COLORS["blue_soft"], COLORS["blue"], COLORS["blue"]),
+        (f"E2E {e2e:.2f} ms", COLORS["red_soft"], COLORS["red"], COLORS["red"]),
+        (platform_label, COLORS["slate_soft"], COLORS["ink"], COLORS["ink"]),
+    ]:
+        x += c.pill(x, 235, text, fill, outline, color) + 18
+
+    c.rounded((80, 330, 3220, 980), 30, COLORS["card"], COLORS["line"], 2)
+    c.text((125, 385), "Runtime Topology", 34, COLORS["ink"], True)
+    c.text((125, 430), "Short arrows show tensor handoff; large K/V tensors stay on device in the partitioned runtime.", 23, COLORS["muted"])
+
+    y = 500
     boxes = [
-        (120, y, 495, y + 360),
-        (620, y, 1085, y + 360),
-        (1225, y, 1690, y + 360),
-        (1830, y, 2295, y + 360),
-        (2435, y, 2900, y + 360),
-        (3040, y, 3420, y + 360),
+        (125, y, 520, y + 360),
+        (640, y, 1050, y + 360),
+        (1170, y, 1580, y + 360),
+        (1700, y, 2110, y + 360),
+        (2230, y, 2640, y + 360),
+        (2760, y, 3175, y + 360),
     ]
-    c.rounded(boxes[0], 22, "#f8fafc", "#64748b", 4)
-    c.draw.rounded_rectangle((150, y + 26, 300, y + 64), radius=19, fill="#64748b")
-    c.text((225, y + 46), "Input", 18, "#ffffff", True, anchor="mm")
-    c.text((150, y + 98), "Host Preprocess", 27, "#111827", True)
-    c.draw.line((150, y + 140, 465, y + 140), fill="#cbd5e1", width=2)
-    c.bullet(155, y + 170, "real RoboTwin 3-camera sample")
-    c.bullet(155, y + 205, "14D state -> proprio token")
-    c.bullet(155, y + 240, "precomputed T5 context")
-    c.text((170, y + 322), f"eager e2e {eager_e2e:.2f} ms", 17, "#475569")
-
-    draw_module(
+    stage_card(
+        c,
+        boxes[0],
+        "Input",
+        "Host Preprocess",
+        ["3 cameras, 384x320", "14D state", "T5 context"],
+        "real sample",
+        "host",
+        COLORS["slate"],
+        COLORS["slate_soft"],
+    )
+    stage_card(
         c,
         boxes[1],
         "TRT 1",
-        "VAE Image\nEncoder",
-        ["image [1,3,384,320]", "out first-frame latents", "[1,48,1,24,20]"],
+        "VAE Image Encoder",
+        ["image [1,3,384,320]", "first-frame latents", "[1,48,1,24,20]"],
         f"{stage(trt, 'vae_image_encoder_ms'):.2f} ms",
         f"{engine_gib(trt, 'vae_image_encoder'):.2f} GiB",
-        "blue",
+        COLORS["blue"],
+        COLORS["blue_soft"],
     )
-    draw_module(
+    stage_card(
         c,
         boxes[2],
         "TRT 2",
-        "Video Prefill\n+ KV Cache",
-        ["first-frame latents", "context/mask [1,129]", "30 layers x K/V tensors"],
-        f"{stage(trt, 'video_prefill_ms'):.2f} ms",
+        "Video Prefill + K/V",
+        ["30 Transformer layers", "context [1,129,4096]", "60 K/V outputs"],
+        f"{prefill:.2f} ms",
         f"{engine_gib(trt, 'video_prefill'):.2f} GiB",
-        "blue",
+        COLORS["teal"],
+        COLORS["teal_soft"],
     )
-    draw_module(
+    stage_card(
         c,
         boxes[3],
         "TRT 3",
-        "Action Denoise\nStep",
-        ["action latent [1,32,14]", "context + video K/V", "out pred_action"],
+        "Action Denoise Step",
+        ["action latent [1,32,14]", "video K/V cache", "pred_action"],
         f"{stage(trt, 'action_denoise_loop_ms'):.2f} ms",
         f"{engine_gib(trt, 'action_step_dynamic_kv'):.2f} GiB",
-        "blue",
+        COLORS["blue"],
+        COLORS["blue_soft"],
     )
-    draw_module(
+    stage_card(
         c,
         boxes[4],
         "Host",
-        "Flow-Match\nScheduler",
-        ["latents <- step(...)", "N=1 in benchmark", "host-side tensor op"],
+        "Flow-Match Scheduler",
+        ["N=1 benchmark", "delta = -1.0", "FP16 timestep"],
         f"{stage(trt, 'scheduler_total_ms'):.2f} ms",
         "no engine",
-        "green",
+        COLORS["green"],
+        COLORS["green_soft"],
     )
-    draw_module(
+    stage_card(
         c,
         boxes[5],
         "Host",
-        "Action Decode\n/ Denorm",
-        ["inverse z-score", "action chunk [1,32,14]", f"finite={trt.get('output_finite')}"],
+        "Action Decode / Denorm",
+        ["inverse z-score", "chunk [1,32,14]", f"finite={trt.get('output_finite')}"],
         f"{stage(trt, 'action_decode_ms'):.2f} ms",
         "no engine",
-        "green",
+        COLORS["green"],
+        COLORS["green_soft"],
     )
     for left, right in zip(boxes, boxes[1:]):
-        c.arrow(left[2] + 12, y + 190, right[0] - 20)
+        c.arrow(left[2] + 18, y + 180, right[0] - 22)
 
-    c.rounded((120, 880, 3420, 1125), 22, "#f8fafc", "#cbd5e1", 2)
-    c.text((160, 930), "Tensor Handoff Lane", 30, "#111827", True)
-    handoffs = [
-        "Host -> TRT1: image [1,3,384,320]",
-        "TRT1 -> TRT2: first_frame_latents [1,48,1,24,20]",
-        "TRT2 -> TRT3: 60 K/V tensors, each [1,120,3072]",
-        "TRT3 -> Host: pred_action [1,32,14]",
-    ]
-    hx = 160
-    for item in handoffs:
-        c.rounded((hx, 980, hx + 740, 1085), 16, "#ffffff", "#cbd5e1", 2)
-        c.text((hx + 24, 1015), item.split(":")[0], 20, "#111827", True)
-        c.text((hx + 24, 1050), item.split(": ", 1)[1], 18, "#334155")
-        hx += 805
-
-    c.rounded((120, 1215, 1700, 1655), 22, "#f8fafc", "#cbd5e1", 2)
-    c.text((165, 1265), "Latency Lane", 32, "#111827", True)
-    c.text((165, 1310), f"Measured on {platform_label}; FP16 TensorRT, warmup={trt.get('warmup_batches')}, measure={trt.get('measure_batches')}.", 22, "#475569")
+    c.rounded((80, 1050, 1575, 1620), 28, COLORS["card"], COLORS["line"], 2)
+    c.text((125, 1100), "Latency Anatomy", 33, COLORS["ink"], True)
+    c.text((125, 1144), f"Mean E2E {e2e:.2f} ms; p95 {p95:.2f} ms. Video prefill dominates this platform.", 23, COLORS["muted"])
     parts = [
-        ("vae", stage(trt, "vae_image_encoder_ms"), "#2563eb"),
-        ("prefill", stage(trt, "video_prefill_ms"), "#0f766e"),
-        ("kv cast", stage(trt, "kv_cast_ms"), "#94a3b8"),
-        ("denoise", stage(trt, "action_denoise_loop_ms"), "#f97316"),
-        ("sched", stage(trt, "scheduler_total_ms"), "#22c55e"),
-        ("decode", stage(trt, "action_decode_ms"), "#64748b"),
+        ("VAE", stage(trt, "vae_image_encoder_ms"), COLORS["blue"]),
+        ("Prefill", prefill, COLORS["teal"]),
+        ("KV cast", stage(trt, "kv_cast_ms"), COLORS["slate"]),
+        ("Denoise", stage(trt, "action_denoise_loop_ms"), COLORS["orange"]),
+        ("Sched", stage(trt, "scheduler_total_ms"), COLORS["green"]),
+        ("Decode", stage(trt, "action_decode_ms"), COLORS["slate"]),
     ]
-    total = max(sum(v for _, v, _ in parts), 1.0)
-    x = 165
+    total = max(sum(value for _, value, _ in parts), 1.0)
+    bx = 125
+    by = 1225
+    max_w = 1320
     for name, value, color in parts:
-        w = max(28, int(1300 * value / total))
-        c.draw.rounded_rectangle((x, 1380, x + w, 1465), radius=10, fill=color)
-        c.text((x + w / 2, 1410), name, 18, "#ffffff", True, anchor="mm")
-        c.text((x + w / 2, 1442), f"{value:.2f} ms", 17, "#ffffff", anchor="mm")
-        x += w + 4
-    c.text((170, 1535), f"end-to-end mean {e2e:.2f} ms", 26, "#b91c1c", True)
-    c.text((650, 1535), f"p95 {p95:.2f} ms", 26, "#c2410c", True)
+        w = max(18, int(max_w * value / total))
+        c.draw.rounded_rectangle((bx, by, bx + w, by + 82), radius=12, fill=color)
+        if w > 95:
+            c.text((bx + w / 2, by + 28), name, 19, "#ffffff", True, anchor="mm")
+            c.text((bx + w / 2, by + 58), f"{value:.2f} ms", 18, "#ffffff", True, anchor="mm")
+        bx += w + 5
+    c.text((125, 1365), f"Prefill share: {prefill:.2f} / {e2e:.2f} = {pct(prefill, e2e):.1f}%", 28, COLORS["red"], True)
+    c.text((125, 1410), "This is the stage to optimize first on both AGX and DGX.", 23, COLORS["muted"])
 
-    c.rounded((1825, 1215, 3420, 1655), 22, "#f8fafc", "#cbd5e1", 2)
-    c.text((1870, 1265), "Plan Size / Runtime Validity", 32, "#111827", True)
-    sizes = [
-        ("vae_image_encoder", engine_gib(trt, "vae_image_encoder"), "#2563eb"),
-        ("video_prefill", engine_gib(trt, "video_prefill"), "#0f766e"),
-        ("action_step", engine_gib(trt, "action_step_dynamic_kv"), "#f97316"),
-    ]
-    max_size = max([s for _, s, _ in sizes] + [1.0])
-    yy = 1340
-    for name, value, color in sizes:
-        c.text((1870, yy), name, 21, "#111827")
-        c.draw.rounded_rectangle((2160, yy - 6, 3180, yy + 34), radius=9, fill="#e2e8f0")
-        c.draw.rounded_rectangle((2160, yy - 6, 2160 + int(1020 * value / max_size), yy + 34), radius=9, fill=color)
-        c.text((3220, yy), f"{value:.2f} GiB", 22, "#0f172a", True)
-        yy += 78
+    c.rounded((1665, 1050, 3220, 1620), 28, COLORS["card"], COLORS["line"], 2)
+    c.text((1710, 1100), "Validity Boundaries", 33, COLORS["ink"], True)
     d1, d2 = drift_summary(drift)
-    c.text((1870, 1590), d1, 20, "#15803d", True)
-    c.text((1870, 1625), d2, 18, "#92400e")
+    for yy, key, val, color in [
+        (1160, "Aligned", "checkpoint, sample, text cache, batch=1, FP16 TRT topology", COLORS["green"]),
+        (1235, "Not Hardware-Only", "TRT/CUDA/export stack and tactics differ across platforms", COLORS["red"]),
+        (1310, "Drift", d1, COLORS["teal"]),
+        (1385, "Action Drift", d2, COLORS["orange"]),
+    ]:
+        c.text((1710, yy), key, 25, color, True)
+        c.wrapped(2055, yy, val, 22, 62, COLORS["muted"])
+    c.text((1710, 1535), "Report as: same deployment chain reproduced, not a strict hardware-only A/B.", 24, COLORS["ink"], True)
 
-    c.rounded((120, 1730, 3420, 1905), 22, "#fff7ed", "#fed7aa", 2)
-    c.text((160, 1775), "Interpretation", 28, "#111827", True)
-    c.text((160, 1820), "Runtime is finite-output-valid and aligned to AGX protocol. Drift/simulator success-rate remains the accuracy gate.", 21, "#334155")
-    c.text((160, 1860), "Sources: FastWAM deploy JSON, real RoboTwin sample, precomputed T5 cache.", 18, "#64748b")
+    c.rounded((80, 1715, 3220, 1945), 28, COLORS["orange_soft"], "#fed7aa", 2)
+    c.text((125, 1765), "Interpretation", 32, COLORS["ink"], True)
+    c.wrapped(
+        125,
+        1815,
+        "The runtime is finite-output-valid. The main bottleneck is the Transformer video prefill/K/V partition, not image preprocessing or action decode.",
+        24,
+        135,
+        COLORS["muted"],
+    )
     c.save(path)
 
 
-def draw_comparison(path: Path, *, agx_eager: dict[str, Any], agx_trt: dict[str, Any], agx_drift: dict[str, Any], dgx_eager: dict[str, Any], dgx_trt: dict[str, Any], dgx_drift: dict[str, Any]) -> None:
-    c = Canvas(3600, 2520)
-    c.text((90, 75), "FastWAM Baseline: AGX Orin vs. DGX Spark Runtime Comparison", 52, "#111827", True)
-    c.text((90, 145), "Same checkpoint, same real RoboTwin sample contract, same precomputed T5 text cache, batch=1, num_inference_steps=1.", 27, "#475569")
-    c.pill((90, 205), "TensorRT FP16 runtime", "#e6fffb", "#0f766e", "#0f766e")
-    c.pill((390, 205), "real-text cache", "#eef2ff", "#4f46e5", "#4338ca")
-    c.pill((615, 205), "cross-device comparison", "#fef2f2", "#dc2626", "#b91c1c")
+def small_bar(c: Canvas, x: int, y: int, width: int, value: float, max_value: float, color: str, label: str) -> None:
+    c.draw.rounded_rectangle((x, y, x + width, y + 34), radius=8, fill="#e2e8f0")
+    c.draw.rounded_rectangle((x, y, x + max(2, int(width * value / max_value)), y + 34), radius=8, fill=color)
+    c.text((x + width + 16, y + 4), label, 20, COLORS["ink"], True)
+
+
+def draw_comparison(
+    path: Path,
+    *,
+    agx_eager: dict[str, Any],
+    agx_trt: dict[str, Any],
+    agx_drift: dict[str, Any],
+    dgx_eager: dict[str, Any],
+    dgx_trt: dict[str, Any],
+    dgx_drift: dict[str, Any],
+) -> None:
+    del agx_drift
+    c = Canvas(3400, 2600)
+    header(
+        c,
+        "FastWAM AGX Orin vs. DGX Spark",
+        "Cross-platform reproduction of the same FastWAM deployment chain. The result is aligned for runtime topology, but not a strict hardware-only A/B.",
+    )
+    x = 90
+    for text, fill, outline, color in [
+        ("same model + sample", COLORS["teal_soft"], COLORS["teal"], COLORS["teal"]),
+        ("FP16 TensorRT engines", COLORS["blue_soft"], COLORS["blue"], COLORS["blue"]),
+        ("batch=1, steps=1", COLORS["orange_soft"], COLORS["orange"], COLORS["orange"]),
+        ("not hardware-only", COLORS["red_soft"], COLORS["red"], COLORS["red"]),
+    ]:
+        x += c.pill(x, 235, text, fill, outline, color) + 18
 
     agx_e2e = metric(agx_trt, "mean_end_to_end_ms")
     dgx_e2e = metric(dgx_trt, "mean_end_to_end_ms")
-    e2e_speed = agx_e2e / dgx_e2e if dgx_e2e else 0.0
-    eager_speed = metric(agx_eager, "mean_end_to_end_ms") / metric(dgx_eager, "mean_end_to_end_ms") if metric(dgx_eager, "mean_end_to_end_ms") else 0.0
+    e2e_speed = agx_e2e / dgx_e2e
+    agx_prefill = stage(agx_trt, "video_prefill_ms")
+    dgx_prefill = stage(dgx_trt, "video_prefill_ms")
+    prefill_speed = agx_prefill / dgx_prefill
+    target_3x = agx_e2e / 3.0
+    dgx_prefill_share = pct(dgx_prefill, dgx_e2e)
+    del agx_eager, dgx_eager
 
-    c.rounded((80, 300, 1740, 720), 18, "#ffffff", "#cbd5e1", 2)
-    c.text((120, 350), "(a) Shared workload and deployment path", 30, "#111827", True)
-    for x, title, lines in [
-        (130, "Model / data", ["FastWAM released RoboTwin checkpoint", "RoboTwin unified ep0 frame0", "3 cameras + 14D state"]),
-        (560, "Runtime", ["VAE image encoder TRT", "video prefill + K/V TRT", "action step dynamic-KV TRT"]),
-        (990, "Protocol", ["batch size = 1", "warmup / measure = 2 / 5", "num_inference_steps = 1"]),
-        (1340, "Topology", ["TRT1 -> TRT2 -> TRT3", "host scheduler", "host action denorm"]),
-    ]:
-        c.text((x, 405), title, 24, "#111827", True)
-        yy = 450
-        for line in lines:
-            c.bullet(x, yy, line, 18)
-            yy += 34
-    c.rounded((220, 615, 1550, 680), 16, "#f8fafc", "#94a3b8", 2)
-    c.text((250, 638), "Host -> VAE TRT -> Video Prefill TRT -> Action Step TRT -> Scheduler -> Decode", 22, "#0f172a", True)
-
-    c.rounded((1810, 300, 3520, 720), 18, "#ffffff", "#cbd5e1", 2)
-    c.text((1850, 350), "(b) Platform and environment delta", 30, "#111827", True)
-    c.text((1900, 425), "Jetson AGX Orin", 27, "#1d4ed8", True)
-    c.text((2780, 425), "DGX Spark", 27, "#c2410c", True)
-    rows = [
-        ("Accelerator", "AGX Orin 64GB unified memory", "NVIDIA GB10"),
-        ("CUDA / TRT", "AGX TensorRT stack", f"TensorRT {dgx_trt.get('tensorrt_version', '10.16.1.11')}"),
-        ("PyTorch", "AGX eager BF16 baseline", "torch 2.11.0+cu130"),
-        ("Power mode", "MAXN + jetson_clocks", "default driver boost; not locked"),
-        ("Memory", "unified RAM visible", "nvidia-smi GPU memory N/A"),
+    c.rounded((80, 330, 1570, 820), 28, COLORS["card"], COLORS["line"], 2)
+    c.text((125, 385), "Aligned Runtime Variables", 34, COLORS["ink"], True)
+    aligned = [
+        ("Model", "FastWAM released RoboTwin checkpoint"),
+        ("Input", "same real RoboTwin sample and instruction"),
+        ("Precision", "FP16 TensorRT engines"),
+        ("Protocol", "batch=1, warmup/measure=2/5, steps=1"),
+        ("Topology", "VAE -> video prefill -> action step -> host decode"),
     ]
-    yy = 475
-    for label, agx, dgx in rows:
-        c.text((1850, yy), label, 18, "#475569", True)
-        c.text((2050, yy), agx, 18, "#111827")
-        c.text((2780, yy), dgx, 18, "#111827")
-        yy += 43
+    yy = 450
+    for key, val in aligned:
+        c.text((125, yy), key, 23, COLORS["teal"], True)
+        c.text((330, yy), val, 23, COLORS["muted"])
+        yy += 58
 
-    c.rounded((80, 770, 1740, 1280), 18, "#ffffff", "#cbd5e1", 2)
-    c.text((120, 820), "(c) End-to-end runtime", 30, "#111827", True)
-    c.text((145, 925), f"{agx_e2e:.2f} ms", 48, "#2563eb", True)
-    c.text((430, 930), "->", 42, "#475569", True)
-    c.text((540, 925), f"{dgx_e2e:.2f} ms", 48, "#ea580c", True)
-    c.rounded((930, 900, 1245, 1015), 14, "#fef2f2", "#dc2626", 2)
-    c.text((1088, 940), f"{e2e_speed:.2f}x", 42, "#b91c1c", True, anchor="mm")
-    c.text((1088, 985), "TRT E2E speedup", 18, "#b91c1c", True, anchor="mm")
-    c.text((1330, 930), f"{1000/agx_e2e:.2f} Hz -> {1000/dgx_e2e:.2f} Hz", 24, "#0f172a", True)
-    c.text((145, 1095), f"Eager .pth E2E: {metric(agx_eager, 'mean_end_to_end_ms'):.2f} ms -> {metric(dgx_eager, 'mean_end_to_end_ms'):.2f} ms ({eager_speed:.2f}x)", 23, "#334155")
-
-    max_e2e = max(agx_e2e, dgx_e2e, 1.0)
-    for yy, name, value, color in [(1165, "AGX TRT", agx_e2e, "#2563eb"), (1225, "DGX TRT", dgx_e2e, "#ea580c")]:
-        c.text((145, yy), name, 20, "#111827")
-        c.draw.rounded_rectangle((290, yy - 8, 1280, yy + 28), radius=8, fill="#e2e8f0")
-        c.draw.rounded_rectangle((290, yy - 8, 290 + int(990 * value / max_e2e), yy + 28), radius=8, fill=color)
-        c.text((1300, yy - 4), f"{value:.2f} ms", 20, "#111827")
-
-    c.rounded((1810, 770, 3520, 1280), 18, "#ffffff", "#cbd5e1", 2)
-    c.text((1850, 820), "(d) Per-stage latency, aligned runtime modules", 30, "#111827", True)
-    stage_keys = [
-        ("VAE", "vae_image_encoder_ms"),
-        ("Video prefill", "video_prefill_ms"),
-        ("KV cast", "kv_cast_ms"),
-        ("Action loop", "action_denoise_loop_ms"),
-        ("Scheduler", "scheduler_total_ms"),
-        ("Decode", "action_decode_ms"),
+    c.rounded((1665, 330, 3320, 820), 28, COLORS["card"], COLORS["line"], 2)
+    c.text((1710, 385), "Not Fully Controlled", 34, COLORS["ink"], True)
+    uncontrolled = [
+        ("TRT stack", "AGX 10.3.0 vs DGX 10.16.1"),
+        ("Builder/tactics", "engines are platform-specific plan files"),
+        ("Power", "AGX MAXN + jetson_clocks; DGX default boost"),
+        ("KV dtype", "AGX casts 29 K/V bindings; DGX direct FP16"),
     ]
-    x = 1880
-    for label, key in stage_keys:
+    yy = 450
+    for key, val in uncontrolled:
+        c.text((1710, yy), key, 23, COLORS["red"], True)
+        c.text((1945, yy), val, 23, COLORS["muted"])
+        yy += 58
+
+    c.rounded((80, 890, 1570, 1390), 28, COLORS["card"], COLORS["line"], 2)
+    c.text((125, 945), "Measured Speedup", 34, COLORS["ink"], True)
+    c.text((125, 1015), f"TRT E2E: {agx_e2e:.2f} ms / {dgx_e2e:.2f} ms = {e2e_speed:.2f}x", 36, COLORS["red"], True)
+    max_e2e = max(agx_e2e, dgx_e2e)
+    small_bar(c, 125, 1135, 850, agx_e2e, max_e2e, COLORS["blue"], f"AGX TRT {agx_e2e:.2f} ms")
+    small_bar(c, 125, 1210, 850, dgx_e2e, max_e2e, COLORS["orange"], f"DGX TRT {dgx_e2e:.2f} ms")
+    c.text((125, 1310), f"TRT throughput: {1000/agx_e2e:.2f} Hz -> {1000/dgx_e2e:.2f} Hz", 25, COLORS["ink"], True)
+
+    c.rounded((1665, 890, 3320, 1390), 28, COLORS["red_soft"], "#fecdd3", 3)
+    c.text((1710, 945), "Why DGX Is < 2x Faster", 34, COLORS["red"], True)
+    c.text((1710, 1010), f"3x target budget = AGX E2E / 3 = {agx_e2e:.2f} / 3 = {target_3x:.2f} ms", 27, COLORS["ink"], True)
+    c.text((1710, 1075), f"DGX video prefill alone = {dgx_prefill:.2f} ms", 32, COLORS["red"], True)
+    c.text((1710, 1140), f"{dgx_prefill:.2f} ms > {target_3x:.2f} ms, so 3x is impossible without prefill optimization.", 27, COLORS["ink"], True)
+    c.text((1710, 1215), f"Prefill speedup = {agx_prefill:.2f} / {dgx_prefill:.2f} = {prefill_speed:.2f}x", 28, COLORS["teal"], True)
+    c.text((1710, 1280), f"Prefill share on DGX = {dgx_prefill:.2f} / {dgx_e2e:.2f} = {dgx_prefill_share:.1f}%", 28, COLORS["teal"], True)
+
+    c.rounded((80, 1460, 3320, 1995), 28, COLORS["card"], COLORS["line"], 2)
+    c.text((125, 1515), "Stage Split", 34, COLORS["ink"], True)
+    stage_rows = [
+        ("VAE image encoder", "vae_image_encoder_ms", "TRT 1"),
+        ("Video prefill + K/V", "video_prefill_ms", "TRT 2, dominant"),
+        ("K/V cast", "kv_cast_ms", "platform dtype artifact"),
+        ("Action denoise loop", "action_denoise_loop_ms", "TRT 3"),
+        ("Scheduler", "scheduler_total_ms", "host"),
+        ("Decode", "action_decode_ms", "host"),
+    ]
+    x0 = 125
+    c.text((x0, 1582), "Stage", 23, COLORS["ink"], True)
+    c.text((800, 1582), "AGX", 23, COLORS["blue"], True)
+    c.text((1110, 1582), "DGX", 23, COLORS["orange"], True)
+    c.text((1420, 1582), "Speedup", 23, COLORS["red"], True)
+    c.text((1700, 1582), "Interpretation", 23, COLORS["ink"], True)
+    yy = 1635
+    for idx, (name, key, note) in enumerate(stage_rows):
+        if idx % 2 == 0:
+            c.draw.rectangle((110, yy - 12, 3290, yy + 42), fill=COLORS["slate_soft"])
         av = stage(agx_trt, key)
         dv = stage(dgx_trt, key)
         sp = av / dv if dv else 0.0
-        c.text((x, 895), label, 20, "#111827", True)
-        maxv = max(av, dv, 1.0)
-        c.draw.rounded_rectangle((x, 950, x + 250, 990), radius=8, fill="#e2e8f0")
-        c.draw.rounded_rectangle((x, 950, x + int(250 * av / maxv), 990), radius=8, fill="#2563eb")
-        c.text((x + 262, 958), f"{av:.2f}", 18, "#0f172a")
-        c.draw.rounded_rectangle((x, 1010, x + 250, 1050), radius=8, fill="#e2e8f0")
-        c.draw.rounded_rectangle((x, 1010, x + int(250 * dv / maxv), 1050), radius=8, fill="#ea580c")
-        c.text((x + 262, 1018), f"{dv:.2f}", 18, "#0f172a")
-        c.rounded((x + 20, 1100, x + 235, 1145), 18, "#fef2f2", "#dc2626", 2)
-        c.text((x + 128, 1122), f"{sp:.2f}x", 20, "#b91c1c", True, anchor="mm")
-        x += 270
-    c.draw.rectangle((1880, 1190, 1910, 1220), fill="#2563eb")
-    c.text((1922, 1188), "AGX Orin", 18)
-    c.draw.rectangle((2070, 1190, 2100, 1220), fill="#ea580c")
-    c.text((2112, 1188), "DGX Spark", 18)
-    c.text((2500, 1188), "Values are milliseconds; pill values are AGX/DGX speedup.", 18, "#475569")
+        c.text((x0, yy), name, 22, COLORS["ink"], True if "Video" in name else False)
+        c.text((800, yy), f"{av:.2f} ms", 22, COLORS["blue"], True if "Video" in name else False)
+        c.text((1110, yy), f"{dv:.2f} ms", 22, COLORS["orange"], True if "Video" in name else False)
+        c.text((1420, yy), f"{sp:.2f}x", 22, COLORS["red"], True)
+        c.text((1700, yy), note, 22, COLORS["muted"])
+        yy += 58
 
-    c.rounded((80, 1340, 1740, 1840), 18, "#ffffff", "#cbd5e1", 2)
-    c.text((120, 1390), "(e) Latency anatomy of TensorRT path", 30, "#111827", True)
-    colors = {
-        "vae": "#2563eb",
-        "prefill": "#0f766e",
-        "kv": "#94a3b8",
-        "denoise": "#f97316",
-        "host": "#64748b",
-    }
-    for y0, name, data in [(1515, "AGX", agx_trt), (1650, "DGX", dgx_trt)]:
-        total = max(metric(data, "mean_end_to_end_ms"), 1.0)
-        x0 = 300
-        c.text((160, y0 + 20), name, 28, "#1d4ed8" if name == "AGX" else "#c2410c", True)
-        parts = [
-            ("vae", stage(data, "vae_image_encoder_ms"), colors["vae"]),
-            ("prefill", stage(data, "video_prefill_ms"), colors["prefill"]),
-            ("kv", stage(data, "kv_cast_ms"), colors["kv"]),
-            ("denoise", stage(data, "action_denoise_loop_ms"), colors["denoise"]),
-            ("host", stage(data, "scheduler_total_ms") + stage(data, "action_decode_ms"), colors["host"]),
+    c.rounded((80, 2070, 1570, 2385), 28, COLORS["card"], COLORS["line"], 2)
+    c.text((125, 2120), "Video Prefill Profile", 32, COLORS["ink"], True)
+    c.wrapped(
+        125,
+        2178,
+        "AGX profile: FFN/MLP 33.37 ms (44.5%), self-attn 15.42 ms (20.6%), cross-attn/KV 14.17 ms (18.9%). DGX profile shows the same Transformer prefill stage remains dominant.",
+        24,
+        78,
+        COLORS["muted"],
+    )
+    c.text((125, 2310), "Bottleneck: batch=1 Transformer prefill, not image preprocessing.", 25, COLORS["red"], True)
+
+    c.rounded((1665, 2070, 3320, 2385), 28, COLORS["card"], COLORS["line"], 2)
+    c.text((1710, 2120), "Optimization Direction", 32, COLORS["ink"], True)
+    for i, line in enumerate(
+        [
+            "Prioritize video_prefill INT8/PTQ/QDQ calibration.",
+            "Consider fusing prefill + action step to avoid external K/V traffic.",
+            "Use Nsight for achieved Tensor Core and memory bandwidth, not nvidia-smi busy.",
+            "CUDA Graph cuts enqueue overhead but only changed prefill latency by a few percent.",
         ]
-        for label, value, color in parts:
-            w = max(8, int(1100 * value / total))
-            c.draw.rounded_rectangle((x0, y0, x0 + w, y0 + 70), radius=8, fill=color)
-            if w > 90:
-                c.text((x0 + w / 2, y0 + 35), label, 18, "#ffffff", True, anchor="mm")
-            x0 += w + 2
-        c.text((1430, y0 + 20), f"{total:.2f} ms", 24, "#111827", True)
-    c.text((140, 1770), "Dominant blocks identify where DGX Spark gains or remaining bottlenecks are concentrated.", 22, "#334155")
+    ):
+        c.bullet(1710, 2178 + i * 43, line, 22, COLORS["teal"])
 
-    c.rounded((1810, 1340, 3520, 1840), 18, "#ffffff", "#cbd5e1", 2)
-    c.text((1850, 1390), "(f) Telemetry and validity boundaries", 30, "#111827", True)
-    c.rounded((1870, 1450, 2570, 1535), 14, "#f8fafc", "#cbd5e1", 1)
-    c.text((1900, 1475), "AGX power state", 20, "#111827", True)
-    c.text((2200, 1472), "MAXN + jetson_clocks", 25, "#1d4ed8", True)
-    c.rounded((2650, 1450, 3360, 1535), 14, "#f8fafc", "#cbd5e1", 1)
-    c.text((2680, 1475), "Spark GPU", 20, "#111827", True)
-    c.text((2880, 1472), "NVIDIA GB10", 25, "#0f766e", True)
-    d1, d2 = drift_summary(dgx_drift)
-    c.text((1870, 1600), "Controlled / aligned", 24, "#047857", True)
-    for i, line in enumerate(["model checkpoint", "sample contract", "text cache semantics", "batch=1, steps=1, FP16 TRT"]):
-        c.bullet(1880, 1645 + i * 35, line, 18, dot="#047857")
-    c.text((2650, 1600), "Not controlled", 24, "#b91c1c", True)
-    for i, line in enumerate(["CUDA/TRT/PyTorch versions", "TensorRT tactic selection", "power-lock mechanism", "sim success-rate accuracy"]):
-        c.bullet(2660, 1645 + i * 35, line, 18, dot="#b91c1c")
-    c.text((1870, 1810), f"DGX drift: {d1}; {d2}", 18, "#92400e")
-
-    c.rounded((80, 1900, 3520, 2390), 18, "#ffffff", "#cbd5e1", 2)
-    c.text((120, 1950), "(g) Numerical summary", 30, "#111827", True)
-    columns = [120, 900, 1320, 1740, 2180]
-    headers = ["Metric", "AGX Orin", "DGX Spark", "Speedup", "Comment"]
-    for x, h in zip(columns, headers):
-        c.text((x, 2010), h, 22, "#111827", True)
-    c.draw.line((115, 2052, 3470, 2052), fill="#cbd5e1", width=2)
-    rows = [
-        ("TRT E2E mean", agx_e2e, dgx_e2e, e2e_speed, "full partitioned runtime"),
-        ("Eager .pth E2E", metric(agx_eager, "mean_end_to_end_ms"), metric(dgx_eager, "mean_end_to_end_ms"), eager_speed, "BF16 PyTorch baseline"),
-        ("VAE image encoder", stage(agx_trt, "vae_image_encoder_ms"), stage(dgx_trt, "vae_image_encoder_ms"), 0, "TRT 1"),
-        ("Video prefill", stage(agx_trt, "video_prefill_ms"), stage(dgx_trt, "video_prefill_ms"), 0, "TRT 2 largest graph"),
-        ("Action denoise loop", stage(agx_trt, "action_denoise_loop_ms"), stage(dgx_trt, "action_denoise_loop_ms"), 0, "TRT 3 + host scheduler loop"),
-    ]
-    yy = 2090
-    for name, av, dv, sp, comment in rows:
-        sp = sp or (av / dv if dv else 0.0)
-        if (yy // 55) % 2 == 0:
-            c.draw.rectangle((115, yy - 10, 3470, yy + 38), fill="#f8fafc")
-        c.text((columns[0], yy), name, 19)
-        c.text((columns[1], yy), f"{av:.2f} ms", 19, "#1d4ed8")
-        c.text((columns[2], yy), f"{dv:.2f} ms", 19, "#c2410c")
-        c.text((columns[3], yy), f"{sp:.2f}x", 19, "#b91c1c", True)
-        c.text((columns[4], yy), comment, 19, "#475569")
-        yy += 55
-    c.text((90, 2460), "Figure. Cross-device FastWAM deployment-chain reproduction. Results compare measured runtime, not hardware-only theoretical peak.", 20, "#475569")
+    c.text((90, 2520), "Figure. FastWAM AGX/DGX deployment-chain comparison. Values are measured runtime; software-stack differences are documented.", 22, COLORS["muted"])
     c.save(path)
 
 

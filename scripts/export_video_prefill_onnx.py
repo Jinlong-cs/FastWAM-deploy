@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import traceback
 from pathlib import Path
 from typing import Any
 
@@ -93,12 +92,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def truncate_text(text: str, limit: int = 6000) -> str:
-    if len(text) <= limit:
-        return text
-    return text[:limit] + f"\n... <truncated {len(text) - limit} chars>"
-
-
 def build_export_state(args: argparse.Namespace) -> tuple[VideoPrefillWrapper, tuple[torch.Tensor, ...], dict[str, object]]:
     preset = get_preset(args.preset)
     with torch.inference_mode():
@@ -158,36 +151,28 @@ def main() -> None:
         "mixed_precision": args.mixed_precision,
         "safe_rope_patch": True,
     }
-    try:
-        install_export_safe_rope()
-        wrapper, inputs, meta = build_export_state(args)
-        status["meta"] = meta
-        output_names = []
-        for layer_idx in range(int(meta["num_kv_layers"])):
-            output_names.extend([f"video_k_{layer_idx}", f"video_v_{layer_idx}"])
-        with torch.inference_mode():
-            torch.onnx.export(
-                wrapper,
-                inputs,
-                str(args.output),
-                input_names=["first_frame_latents", "context", "context_mask"],
-                output_names=output_names,
-                opset_version=args.opset,
-                do_constant_folding=bool(args.constant_folding),
-                dynamic_axes=None,
-            )
-        status["status"] = "success"
-        status["size_bytes"] = args.output.stat().st_size
-        status["size_mib"] = round(args.output.stat().st_size / (1024 * 1024), 2)
-    except Exception as exc:
-        status["status"] = "failed"
-        status["error_type"] = type(exc).__name__
-        status["error"] = str(exc)
-        status["traceback"] = truncate_text(traceback.format_exc())
+    install_export_safe_rope()
+    wrapper, inputs, meta = build_export_state(args)
+    status["meta"] = meta
+    output_names = []
+    for layer_idx in range(int(meta["num_kv_layers"])):
+        output_names.extend([f"video_k_{layer_idx}", f"video_v_{layer_idx}"])
+    with torch.inference_mode():
+        torch.onnx.export(
+            wrapper,
+            inputs,
+            str(args.output),
+            input_names=["first_frame_latents", "context", "context_mask"],
+            output_names=output_names,
+            opset_version=args.opset,
+            do_constant_folding=bool(args.constant_folding),
+            dynamic_axes=None,
+        )
+    status["status"] = "success"
+    status["size_bytes"] = args.output.stat().st_size
+    status["size_mib"] = round(args.output.stat().st_size / (1024 * 1024), 2)
     args.status_output.write_text(json.dumps(status, indent=2, ensure_ascii=False))
     print(json.dumps(status, indent=2, ensure_ascii=False))
-    if status.get("status") != "success":
-        raise SystemExit(1)
 
 
 if __name__ == "__main__":

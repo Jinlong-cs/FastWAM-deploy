@@ -130,10 +130,6 @@ def jsonable(value: Any) -> Any:
         return {str(key): jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [jsonable(item) for item in value]
-    try:
-        json.dumps(value)
-    except TypeError:
-        return str(value)
     return value
 
 

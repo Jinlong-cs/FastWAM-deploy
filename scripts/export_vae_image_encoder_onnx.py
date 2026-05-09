@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import traceback
 from pathlib import Path
 from typing import Any
 
@@ -148,12 +147,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def truncate_text(text: str, limit: int = 4000) -> str:
-    if len(text) <= limit:
-        return text
-    return text[:limit] + f"\n... <truncated {len(text) - limit} chars>"
-
-
 def build_export_input(args: argparse.Namespace) -> tuple[VAEImageEncoderWrapper, torch.Tensor, dict[str, object]]:
     preset = get_preset(args.preset)
     with torch.inference_mode():
@@ -198,36 +191,28 @@ def main() -> None:
         "safe_primitive_patch": not bool(args.no_safe_primitive_patch),
         "direct_vae_model_encode": True,
     }
-    try:
-        if not args.no_safe_primitive_patch:
-            install_export_safe_vae_primitives()
-        if not args.no_safe_attention_patch:
-            install_export_safe_vae_attention()
-        wrapper, input_image, meta = build_export_input(args)
-        status["meta"] = meta
-        with torch.inference_mode():
-            torch.onnx.export(
-                wrapper,
-                (input_image,),
-                str(args.output),
-                input_names=["input_image"],
-                output_names=["first_frame_latents"],
-                opset_version=args.opset,
-                do_constant_folding=bool(args.constant_folding),
-                dynamic_axes=None,
-            )
-        status["status"] = "success"
-        status["size_bytes"] = args.output.stat().st_size
-        status["size_mib"] = round(args.output.stat().st_size / (1024 * 1024), 2)
-    except Exception as exc:
-        status["status"] = "failed"
-        status["error_type"] = type(exc).__name__
-        status["error"] = str(exc)
-        status["traceback"] = truncate_text(traceback.format_exc())
+    if not args.no_safe_primitive_patch:
+        install_export_safe_vae_primitives()
+    if not args.no_safe_attention_patch:
+        install_export_safe_vae_attention()
+    wrapper, input_image, meta = build_export_input(args)
+    status["meta"] = meta
+    with torch.inference_mode():
+        torch.onnx.export(
+            wrapper,
+            (input_image,),
+            str(args.output),
+            input_names=["input_image"],
+            output_names=["first_frame_latents"],
+            opset_version=args.opset,
+            do_constant_folding=bool(args.constant_folding),
+            dynamic_axes=None,
+        )
+    status["status"] = "success"
+    status["size_bytes"] = args.output.stat().st_size
+    status["size_mib"] = round(args.output.stat().st_size / (1024 * 1024), 2)
     args.status_output.write_text(json.dumps(status, indent=2, ensure_ascii=False))
     print(json.dumps(status, indent=2, ensure_ascii=False))
-    if status.get("status") != "success":
-        raise SystemExit(1)
 
 
 if __name__ == "__main__":

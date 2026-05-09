@@ -5,6 +5,7 @@ import argparse
 import gc
 import json
 import math
+import resource
 import statistics
 import time
 from pathlib import Path
@@ -126,12 +127,7 @@ def cuda_memory() -> dict[str, int | None]:
 
 
 def rss_kib() -> int | None:
-    try:
-        import resource
-
-        return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-    except Exception:
-        return None
+    return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
 
 class TrtEngineRunner:
@@ -655,20 +651,10 @@ def benchmark(args: argparse.Namespace) -> dict[str, object]:
 def main() -> None:
     args = parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        result = benchmark(args)
-        result["status"] = "success"
-    except Exception as exc:
-        result = {
-            "status": "failed",
-            "runtime_mode": "partitioned_tensorrt_fastwam",
-            "error_type": type(exc).__name__,
-            "error": str(exc),
-        }
+    result = benchmark(args)
+    result["status"] = "success"
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False))
     print(json.dumps(result, indent=2, ensure_ascii=False))
-    if result.get("status") != "success":
-        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -514,37 +514,27 @@ def build_result(
 def main() -> None:
     args = parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        observation, instruction, sample_source = load_real_sample(args)
-        eager_tensors, eager_metadata = run_eager_reference(
-            args,
-            observation=observation,
-            instruction=instruction,
-        )
-        trt_tensors, trt_metadata = run_trt_candidate(
-            args,
-            eager_tensors=eager_tensors,
-        )
-        result = build_result(
-            args=args,
-            sample_source=sample_source,
-            instruction=instruction,
-            eager_tensors=eager_tensors,
-            trt_tensors=trt_tensors,
-            eager_metadata=eager_metadata,
-            trt_metadata=trt_metadata,
-        )
-    except Exception as exc:
-        result = {
-            "status": "failed",
-            "validation_mode": "eager_reference_vs_partitioned_trt_real_robotwin_text_cache",
-            "error_type": type(exc).__name__,
-            "error": str(exc),
-        }
+    observation, instruction, sample_source = load_real_sample(args)
+    eager_tensors, eager_metadata = run_eager_reference(
+        args,
+        observation=observation,
+        instruction=instruction,
+    )
+    trt_tensors, trt_metadata = run_trt_candidate(
+        args,
+        eager_tensors=eager_tensors,
+    )
+    result = build_result(
+        args=args,
+        sample_source=sample_source,
+        instruction=instruction,
+        eager_tensors=eager_tensors,
+        trt_tensors=trt_tensors,
+        eager_metadata=eager_metadata,
+        trt_metadata=trt_metadata,
+    )
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False))
     print(json.dumps(result, indent=2, ensure_ascii=False))
-    if result.get("status") != "success":
-        raise SystemExit(1)
 
 
 if __name__ == "__main__":

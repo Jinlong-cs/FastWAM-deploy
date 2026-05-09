@@ -42,9 +42,7 @@ DEFAULT_PRESET = "robotwin_uncond_3cam_384"
 
 
 def get_preset(name: str) -> FastWAMPreset:
-    try:
-        return PRESETS[name]
-    except KeyError as exc:
+    if name not in PRESETS:
         available = ", ".join(sorted(PRESETS))
-        raise ValueError(f"Unknown FastWAM preset '{name}'. Available presets: {available}") from exc
-
+        raise ValueError(f"Unknown FastWAM preset '{name}'. Available presets: {available}")
+    return PRESETS[name]
