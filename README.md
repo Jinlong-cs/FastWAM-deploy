@@ -10,31 +10,6 @@ commands below.
 
 Upstream reference: [yuantianyuan01/FastWAM](https://github.com/yuantianyuan01/FastWAM).
 
-## File Structure
-
-```text
-FastWAM-deploy/
-├── docs/
-│   └── fastwam_sample_contract.md        # Offline RoboTwin sample and runtime tensor contract
-├── fixtures/
-│   └── fastwam_minimal_sample.json       # Synthetic public fixture for CLI validation
-├── scripts/
-│   ├── check_minimal_fixture.py
-│   ├── download_fastwam_assets.py
-│   ├── check_fastwam_assets.py
-│   ├── prepare_robotwin_unified_sample.py
-│   ├── benchmark_fastwam.py
-│   ├── export_vae_image_encoder_onnx.py
-│   ├── export_video_prefill_onnx.py
-│   ├── export_action_step_dynamic_kv_onnx.py
-│   ├── fix_onnx_double_initializers.py
-│   ├── build_trt_engine_python.py
-│   ├── benchmark_trt_partitioned_runtime.py
-│   ├── compare_partitioned_trt_drift.py
-│   └── fastwam_agx_env.sh
-└── src/tinyaction_fastwam/               # Runtime adapters and deploy helpers
-```
-
 Large private or generated assets are intentionally not tracked:
 
 - FastWAM released checkpoints and dataset stats.
