@@ -44,11 +44,12 @@ class DynamicKVActionStepWrapper(torch.nn.Module):
         self,
         latents_action: torch.Tensor,
         timestep_action: torch.Tensor,
+        scheduler_delta: torch.Tensor,
         context: torch.Tensor,
         context_mask: torch.Tensor,
         *kv_inputs: torch.Tensor,
     ) -> torch.Tensor:
-        return self.model._predict_action_noise_with_cache(
+        pred_action = self.model._predict_action_noise_with_cache(
             latents_action=latents_action,
             timestep_action=timestep_action,
             context=context,
@@ -57,6 +58,12 @@ class DynamicKVActionStepWrapper(torch.nn.Module):
             attention_mask=self.attention_mask,
             video_seq_len=self.video_seq_len,
         )
+        delta = scheduler_delta.to(device=latents_action.device, dtype=latents_action.dtype)
+        if delta.ndim == 0:
+            return (latents_action + pred_action * delta).to(dtype=latents_action.dtype)
+        return (
+            latents_action + pred_action * delta.view(-1, *([1] * (latents_action.ndim - 1)))
+        ).to(dtype=latents_action.dtype)
 
 
 def parse_args() -> argparse.Namespace:
@@ -107,6 +114,7 @@ def build_export_state(args: argparse.Namespace) -> tuple[DynamicKVActionStepWra
             dtype=torch.float32,
         ).to(device=model.device, dtype=model.torch_dtype)
         timestep_action = torch.ones((1,), dtype=latents_action.dtype, device=model.device)
+        scheduler_delta = torch.full((1,), -0.1, dtype=latents_action.dtype, device=model.device)
 
         context, context_mask = policy._get_context()
         if prepared.proprio is not None:
@@ -157,6 +165,7 @@ def build_export_state(args: argparse.Namespace) -> tuple[DynamicKVActionStepWra
         inputs = (
             latents_action.detach(),
             timestep_action.detach(),
+            scheduler_delta.detach(),
             context.detach(),
             context_mask.detach(),
             *kv_inputs,
@@ -166,6 +175,7 @@ def build_export_state(args: argparse.Namespace) -> tuple[DynamicKVActionStepWra
     meta = {
         "latents_action_shape": list(latents_action.shape),
         "timestep_action_shape": list(timestep_action.shape),
+        "scheduler_delta_shape": list(scheduler_delta.shape),
         "context_shape": list(context.shape),
         "context_mask_shape": list(context_mask.shape),
         "video_seq_len": video_seq_len,
@@ -195,7 +205,7 @@ def main() -> None:
     install_export_safe_rope()
     wrapper, inputs, meta = build_export_state(args)
     status["meta"] = meta
-    input_names = ["latents_action", "timestep_action", "context", "context_mask"]
+    input_names = ["latents_action", "timestep_action", "scheduler_delta", "context", "context_mask"]
     for layer_idx in range(int(meta["num_kv_layers"])):
         input_names.extend([f"video_k_{layer_idx}", f"video_v_{layer_idx}"])
     with torch.inference_mode():
@@ -204,7 +214,7 @@ def main() -> None:
             inputs,
             str(args.output),
             input_names=input_names,
-            output_names=["pred_action"],
+            output_names=["latents_action_next"],
             opset_version=args.opset,
             do_constant_folding=bool(args.constant_folding),
             dynamic_axes=None,
